@@ -115,7 +115,12 @@ class ProfessionHUScraper(Scraper):
             
             job_title = await title_element.inner_text()
             relative_url = await title_element.get_attribute("href")
-            job_url = f"{self.base_url}{relative_url}" if relative_url else None
+            
+            # Check if the relative URL already includes the base URL
+            if relative_url.startswith(self.base_url):
+                job_url = relative_url  # Use the full relative URL if it already starts with base_url
+            else:
+                job_url = f"{self.base_url}{relative_url}"  # Otherwise, concatenate as normal
             
             if not job_url:
                 return None
