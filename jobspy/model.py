@@ -283,6 +283,7 @@ class JobResponse(BaseModel):
     jobs: list[JobPost] = []
 
 
+
 class Site(Enum):
     LINKEDIN = "linkedin"
     INDEED = "indeed"
@@ -290,7 +291,13 @@ class Site(Enum):
     GLASSDOOR = "glassdoor"
     GOOGLE = "google"
     BAYT = "bayt"
+    PROFESSIONHU = "professionhu"
     NAUKRI = "naukri"
+    POSAOHR = "posaohr"
+    INFOJOBS = "infojobs"
+    PRACUJPL = "pracujpl"
+    KARRIEREAT = "karriereat"
+    ARBETSFORMEDLINGEN = "arbetsformedlingen"
 
 
 class SalarySource(Enum):

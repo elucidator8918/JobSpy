@@ -5,6 +5,12 @@ from typing import Tuple
 
 import pandas as pd
 
+from jobspy.posao import PosaoHRScraper  # Added for Posao.hr (Croatia)
+from jobspy.infojobs import InfoJobsScraper  # Added for InfoJobs (Spain)
+from jobspy.pracuj import PracujPLScraper  # Added for Pracuj.pl (Poland)
+from jobspy.karriere import KarriereATScraper  # Added for Karriere.at (Austria)
+from jobspy.arbetsformedlingen import ArbetsformedlingenScraper  # Added for Arbetsformedlingen (Sweden)
+from jobspy.professionhu import ProfessionHUScraper
 from jobspy.bayt import BaytScraper
 from jobspy.glassdoor import Glassdoor
 from jobspy.google import Google
@@ -57,8 +63,14 @@ def scrape_jobs(
         Site.ZIP_RECRUITER: ZipRecruiter,
         Site.GLASSDOOR: Glassdoor,
         Site.GOOGLE: Google,
+        Site.PROFESSIONHU: ProfessionHUScraper,
         Site.BAYT: BaytScraper,
         Site.NAUKRI: Naukri,
+        Site.POSAOHR: PosaoHRScraper,  # Added for Posao.hr (Croatia)
+        Site.INFOJOBS: InfoJobsScraper,  # Added for InfoJobs (Spain)
+        Site.PRACUJPL: PracujPLScraper,  # Added for Pracuj.pl (Poland)
+        Site.KARRIEREAT: KarriereATScraper,  # Added for Karriere.at (Austria)
+        Site.ARBETSFORMEDLINGEN: ArbetsformedlingenScraper,  # Added for Arbetsformedlingen (Sweden)
     }
     set_logger_level(verbose)
     job_type = get_enum_from_value(job_type) if job_type else None

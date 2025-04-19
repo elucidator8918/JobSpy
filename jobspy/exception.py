@@ -38,3 +38,36 @@ class BaytException(Exception):
 class NaukriException(Exception):
     def __init__(self,message=None):
         super().__init__(message or "An error occurred with Naukri")
+
+class ProfessionHUException(Exception):
+    def __init__(self,message=None):
+        super().__init__(message or "An error occurred with ProfessionHU")
+
+class ProfessionHUException(Exception):
+    def __init__(self, message=None):
+        super().__init__(message or "An error occurred with ProfessionHU")
+
+
+class PosaoHRException(Exception):
+    def __init__(self, message=None):
+        super().__init__(message or "An error occurred with Posao.hr")
+
+
+class InfoJobsException(Exception):
+    def __init__(self, message=None):
+        super().__init__(message or "An error occurred with InfoJobs")
+
+
+class PracujPLException(Exception):
+    def __init__(self, message=None):
+        super().__init__(message or "An error occurred with Pracuj.pl")
+
+
+class KarriereATException(Exception):
+    def __init__(self, message=None):
+        super().__init__(message or "An error occurred with Karriere.at")
+
+
+class ArbetsformedlingenException(Exception):
+    def __init__(self, message=None):
+        super().__init__(message or "An error occurred with Arbetsformedlingen")
