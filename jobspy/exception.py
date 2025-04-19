@@ -71,3 +71,7 @@ class KarriereATException(Exception):
 class ArbetsformedlingenException(Exception):
     def __init__(self, message=None):
         super().__init__(message or "An error occurred with Arbetsformedlingen")
+
+class UpworkException(Exception):
+    def __init__(self, message=None):
+        super().__init__(message or "An error occurred with Upwork")

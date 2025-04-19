@@ -5,6 +5,7 @@ from typing import Tuple
 
 import pandas as pd
 
+from jobspy.upwork import UpworkScraper  # Added for Posao.hr (Croatia)
 from jobspy.posao import PosaoHRScraper  # Added for Posao.hr (Croatia)
 from jobspy.infojobs import InfoJobsScraper  # Added for InfoJobs (Spain)
 from jobspy.pracuj import PracujPLScraper  # Added for Pracuj.pl (Poland)
@@ -64,6 +65,7 @@ def scrape_jobs(
         Site.GLASSDOOR: Glassdoor,
         Site.GOOGLE: Google,
         Site.PROFESSIONHU: ProfessionHUScraper,
+        Site.UPWORK: UpworkScraper,
         Site.BAYT: BaytScraper,
         Site.NAUKRI: Naukri,
         Site.POSAOHR: PosaoHRScraper,  # Added for Posao.hr (Croatia)

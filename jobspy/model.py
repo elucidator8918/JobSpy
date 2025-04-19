@@ -291,6 +291,7 @@ class Site(Enum):
     GLASSDOOR = "glassdoor"
     GOOGLE = "google"
     BAYT = "bayt"
+    UPWORK = "upwork"
     PROFESSIONHU = "professionhu"
     NAUKRI = "naukri"
     POSAOHR = "posaohr"
