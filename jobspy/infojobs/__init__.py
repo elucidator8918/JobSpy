@@ -5,6 +5,7 @@ import asyncio
 from typing import List
 
 from playwright.async_api import async_playwright, Page
+from urllib.parse import urlencode
 
 from jobspy.model import (
     Scraper,
@@ -39,7 +40,7 @@ class InfoJobsScraper(Scraper):
         results_wanted = self.scraper_input.results_wanted or 10
 
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
+            browser = await p.chromium.launch(headless=False)
             context = await browser.new_context()
             page = await context.new_page()
 
@@ -60,11 +61,21 @@ class InfoJobsScraper(Scraper):
 
     async def _fetch_jobs(self, page: Page, query: str, page_num: int) -> List[JobPost] | None:
         try:
-            formatted_query = query.replace(" ", "-")
-            url = f"{self.base_url}/ofertas-de-empleo/{formatted_query}_en_{page_num}"
+            query_params = {
+                "keyword": query,
+                "normalizedJobTitleIds": "",  # Can be added if you want to filter by title ID
+                "segmentId": "",
+                "page": page_num,
+                "sortBy": "RELEVANCE",
+                "onlyForeignCountry": "false",
+                "sinceDate": "ANY",
+            }
+
+            search_path = query.replace(" ", "-")
+            url = f"{self.base_url}/ofertas-trabajo/{search_path}/?{urlencode(query_params)}"
 
             await page.goto(url, wait_until="domcontentloaded")
-            await page.wait_for_selector("article.js-job-card", timeout=10000)
+            await page.wait_for_selector("article.js-job-card", timeout=30000)
 
             job_cards = await page.query_selector_all("article.js-job-card")
             if not job_cards:
@@ -92,11 +103,11 @@ class InfoJobsScraper(Scraper):
             href = await title_el.get_attribute("href") if title_el else None
             job_url = href if href and href.startswith("http") else f"{self.base_url}{href}"
 
-            company_el = await card.query_selector(".js-o-company")
-            company = await company_el.inner_text() if company_el else None
+            company_el = await card.query_selector("span[data-test='company-name']")
+            company = await company_el.inner_text() if company_el else "Unknown"
 
-            location_el = await card.query_selector(".js-o-location")
-            location = await location_el.inner_text() if location_el else None
+            location_el = await card.query_selector("span[data-test='location']")
+            location = await location_el.inner_text() if location_el else "Spain"
 
             job_id = f"infojobs-{abs(hash(job_url))}"
             location_obj = Location(city=location, country=Country.from_string(self.country))

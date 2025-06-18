@@ -28,86 +28,101 @@ class PosaoHRScraper(Scraper):
 
     def __init__(self, proxies: list[str] | str | None = None, ca_cert: str | None = None):
         super().__init__(Site.POSAOHR, proxies=proxies, ca_cert=ca_cert)
-        self.scraper_input = None
+        self.scraper_input: ScraperInput | None = None
 
     def scrape(self, scraper_input: ScraperInput) -> JobResponse:
         self.scraper_input = scraper_input
         return asyncio.run(self._async_scrape())
 
     async def _async_scrape(self) -> JobResponse:
-        job_list: list[JobPost] = []
-        results_wanted = self.scraper_input.results_wanted or 10
+        job_list: List[JobPost] = []
+        wanted = self.scraper_input.results_wanted or 10
 
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context()
-            page = await context.new_page()
-            
-            current_page_num = 1
-            while len(job_list) < results_wanted:
-                log.info(f"Fetching Posao.hr jobs page {current_page_num}")
-                jobs = await self._fetch_jobs(page, self.scraper_input.search_term, current_page_num)
+            browser = await p.chromium.launch(headless=False)
+            ctx = await browser.new_context()
+            page = await ctx.new_page()
+
+            page_num = 1
+            while len(job_list) < wanted:
+                log.info(f"📄 Fetching page {page_num}")
+                jobs = await self._fetch_jobs(page, self.scraper_input.search_term, ctx, page_num)
                 if not jobs:
                     break
-
-                job_list.extend(jobs[: results_wanted - len(job_list)])
-                current_page_num += 1
+                job_list.extend(jobs[: wanted - len(job_list)])
+                page_num += 1
                 await asyncio.sleep(random.uniform(self.delay, self.delay + self.band_delay))
 
             await browser.close()
 
         return JobResponse(jobs=job_list)
 
-    async def _fetch_jobs(self, page: Page, query: str, page_num: int) -> List[JobPost] | None:
+    async def _fetch_jobs(self, page: Page, query: str, context, page_num: int) -> List[JobPost] | None:
         try:
-            formatted_query = query.replace(" ", "+")
-            url = f"{self.base_url}/search/?q={formatted_query}&page={page_num}"
-            await page.goto(url, wait_until="domcontentloaded")
-            await page.wait_for_selector(".job_box", timeout=10000)
+            # Navigate to search
+            await page.goto(self.base_url, wait_until="load")
+            # Accept cookies using same logic from sync version
+            try:
+                btn = page.get_by_role("button", name="Dopusti sve")
+                await btn.click(timeout=5000)
+                log.info("✅ Clicked 'Dopusti sve'")
+            except Exception:
+                log.info("ℹ️ No cookie button found")
 
-            job_cards = await page.query_selector_all(".job_box")
-            if not job_cards:
-                log.debug(f"No job cards found on page {page_num}")
+            # Fill the search box and click
+            searchbox = page.get_by_role("searchbox", name="Enter keywords...")
+            await searchbox.click()
+            await searchbox.fill(query)
+            await page.get_by_role("link", name="Search", exact=True).click()
+            await page.wait_for_selector("main", timeout=10000)
+
+            # Select job links like the sync code
+            links = page.locator("main a:has-text('Expires in')")
+            count = await links.count()
+            log.info(f"Found {count} job postings on page {page_num}")
+            if count == 0:
                 return None
 
-            log.debug(f"Found {len(job_cards)} job cards on page {page_num}")
-            job_posts = []
-            for card in job_cards:
-                try:
-                    job_post = await self._extract_job_info(card)
-                    if job_post:
-                        job_posts.append(job_post)
-                except Exception as e:
-                    log.error(f"Error extracting job info: {str(e)}")
+            out: List[JobPost] = []
+            for i in range(count):
+                link = links.nth(i)
+                title = (await link.inner_text()).strip()
+                href = await link.get_attribute("href")
+                job_url = href if href.startswith("http") else self.base_url + href
 
-            return job_posts
+                log.debug(f"Processing job: {title} → {job_url}")
+                post = await self._process_job_detail(context, title, job_url)
+                if post:
+                    out.append(post)
+            return out
+
         except Exception as e:
-            log.error(f"Error fetching jobs: {str(e)}")
+            log.error(f"Error on page {page_num}: {e!r}")
             return None
 
-    async def _extract_job_info(self, card) -> JobPost | None:
+    async def _process_job_detail(self, context, title: str, job_url: str) -> JobPost | None:
         try:
-            title_el = await card.query_selector("h2 a")
-            title = await title_el.inner_text() if title_el else None
-            href = await title_el.get_attribute("href") if title_el else None
-            job_url = f"{self.base_url}{href}" if href else None
-
-            company_el = await card.query_selector(".job_company")
-            company = await company_el.inner_text() if company_el else None
-
-            location_el = await card.query_selector(".job_location")
-            location = await location_el.inner_text() if location_el else None
+            detail = await context.new_page()
+            await detail.goto(job_url)
+            await detail.wait_for_selector("#content", timeout=8000)
+            description = (await detail.locator("#content").inner_text()).strip()
+            await detail.close()
 
             job_id = f"posaohr-{abs(hash(job_url))}"
-            location_obj = Location(city=location, country=Country.from_string(self.country))
+            # Attempt to parse company and location—set placeholders if missing
+            loc, comp = None, None
+            # You can add more parsing logic here if needed
+
+            loc_obj = Location(city=loc or "", country=Country.from_string(self.country))
 
             return JobPost(
                 id=job_id,
                 title=title,
-                company_name=company,
-                location=location_obj,
+                company_name=comp or "",
+                location=loc_obj,
                 job_url=job_url,
+                description=description,
             )
         except Exception as e:
-            log.error(f"Error extracting job details: {str(e)}")
+            log.error(f"Failed detail fetch for {job_url}: {e!r}")
             return None
