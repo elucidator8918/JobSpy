@@ -245,6 +245,11 @@ class PracujPLScraper(Scraper):
             else:
                 title = self._clean_text(position_tag.text)
 
+            # Validate title
+            if not title or title.strip() == "":
+                log.warning("Could not extract valid job title")
+                return None
+
             # Extract Company Name
             company = "N/A"
             company_section = offer_element.find('div', attrs={'data-test': 'section-company'})
@@ -269,8 +274,8 @@ class PracujPLScraper(Scraper):
                 if location_list_item:
                     location = self._clean_text(location_list_item.text)
 
-            # Extract Offer Link
-            job_url = None
+            # Extract Offer Link - ensure we always have a valid URL
+            job_url = ""
             link_tag = None
             if position_tag:  # Prefer link within the title h2
                 link_tag = position_tag.find('a')
@@ -279,6 +284,10 @@ class PracujPLScraper(Scraper):
 
             if link_tag and link_tag.get('href'):
                 job_url = urljoin(base_url, link_tag['href'])
+            else:
+                # If no URL found, create a fallback URL
+                job_url = f"{base_url}/oferta/{offer_id}" if offer_id else f"{base_url}/oferta/unknown"
+                log.warning(f"Could not find job URL for offer {offer_id}, using fallback: {job_url}")
 
             # Create job ID
             job_id = f"pracujpl-{offer_id}" if offer_id else f"pracujpl-{abs(hash(job_url))}"
