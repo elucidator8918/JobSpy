@@ -245,11 +245,6 @@ class PracujPLScraper(Scraper):
             else:
                 title = self._clean_text(position_tag.text)
 
-            # Validate title
-            if not title or title.strip() == "":
-                log.warning("Could not extract valid job title")
-                return None
-
             # Extract Company Name
             company = "N/A"
             company_section = offer_element.find('div', attrs={'data-test': 'section-company'})
@@ -274,22 +269,20 @@ class PracujPLScraper(Scraper):
                 if location_list_item:
                     location = self._clean_text(location_list_item.text)
 
-            # Extract Offer Link - ensure we always have a valid URL
-            job_url = ""
+            # Extract Offer Link
             link_tag = None
             if position_tag:  # Prefer link within the title h2
                 link_tag = position_tag.find('a')
             if not link_tag:  # Fallback to the direct link if not in title
                 link_tag = offer_element.find('a', attrs={'data-test': 'link-offer'}, recursive=False)
 
-            if link_tag and link_tag.get('href'):
-                job_url = urljoin(base_url, link_tag['href'])
-            else:
-                # If no URL found, create a fallback URL
-                job_url = f"{base_url}/oferta/{offer_id}" if offer_id else f"{base_url}/oferta/unknown"
-                log.warning(f"Could not find job URL for offer {offer_id}, using fallback: {job_url}")
+            if not link_tag or not link_tag.get('href'):
+                log.warning("Could not find offer link - skipping this job")
+                return None
+            
+            job_url = urljoin(base_url, link_tag['href'])
 
-            # Create job ID
+            # Create job ID - now we're guaranteed to have job_url
             job_id = f"pracujpl-{offer_id}" if offer_id else f"pracujpl-{abs(hash(job_url))}"
 
             # Create location object
