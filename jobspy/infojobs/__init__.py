@@ -40,7 +40,7 @@ class InfoJobsScraper(Scraper):
         results_wanted = self.scraper_input.results_wanted or 10
 
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=False)
+            browser = await p.chromium.launch(headless=True)
             context = await browser.new_context()
             page = await context.new_page()
 
