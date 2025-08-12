@@ -13,6 +13,7 @@ from jobspy.karriere import KarriereATScraper  # Added for Karriere.at (Austria)
 from jobspy.arbetsformedlingen import ArbetsformedlingenScraper  # Added for Arbetsformedlingen (Sweden)
 from jobspy.professionhu import ProfessionHUScraper
 from jobspy.bayt import BaytScraper
+from jobspy.bdjobs import BDJobs
 from jobspy.glassdoor import Glassdoor
 from jobspy.google import Google
 from jobspy.indeed import Indeed
@@ -31,6 +32,8 @@ from jobspy.util import (
 )
 from jobspy.ziprecruiter import ZipRecruiter
 
+
+# Update the SCRAPER_MAPPING dictionary in the scrape_jobs function
 
 def scrape_jobs(
     site_name: str | list[str] | Site | list[Site] | None = None,
@@ -52,6 +55,7 @@ def scrape_jobs(
     hours_old: int = None,
     enforce_annual_salary: bool = False,
     verbose: int = 0,
+    user_agent: str = None,
     **kwargs,
 ) -> pd.DataFrame:
     """
@@ -68,6 +72,7 @@ def scrape_jobs(
         Site.UPWORK: UpworkScraper,
         Site.BAYT: BaytScraper,
         Site.NAUKRI: Naukri,
+        Site.BDJOBS: BDJobs,  # Add BDJobs to the scraper mapping
         Site.POSAOHR: PosaoHRScraper,  # Added for Posao.hr (Croatia)
         Site.INFOJOBS: InfoJobsScraper,  # Added for InfoJobs (Spain)
         Site.PRACUJPL: PracujPLScraper,  # Added for Pracuj.pl (Poland)
@@ -112,7 +117,7 @@ def scrape_jobs(
 
     def scrape_site(site: Site) -> Tuple[str, JobResponse]:
         scraper_class = SCRAPER_MAPPING[site]
-        scraper = scraper_class(proxies=proxies, ca_cert=ca_cert)
+        scraper = scraper_class(proxies=proxies, ca_cert=ca_cert, user_agent=user_agent)
         scraped_data: JobResponse = scraper.scrape(scraper_input)
         cap_name = site.value.capitalize()
         site_name = "ZipRecruiter" if cap_name == "Zip_recruiter" else cap_name

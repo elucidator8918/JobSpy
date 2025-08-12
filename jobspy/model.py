@@ -68,6 +68,7 @@ class Country(Enum):
     AUSTRALIA = ("australia", "au", "com.au")
     AUSTRIA = ("austria", "at", "at")
     BAHRAIN = ("bahrain", "bh")
+    BANGLADESH = ("bangladesh", "bd")  # Added Bangladesh
     BELGIUM = ("belgium", "be", "fr:be")
     BULGARIA = ("bulgaria", "bg")
     BRAZIL = ("brazil", "br", "com.br")
@@ -294,6 +295,7 @@ class Site(Enum):
     UPWORK = "upwork"
     PROFESSIONHU = "professionhu"
     NAUKRI = "naukri"
+    BDJOBS = "bdjobs"  # Add this line
     POSAOHR = "posaohr"
     INFOJOBS = "infojobs"
     PRACUJPL = "pracujpl"
@@ -322,17 +324,20 @@ class ScraperInput(BaseModel):
     linkedin_company_ids: list[int] | None = None
     description_format: DescriptionFormat | None = DescriptionFormat.MARKDOWN
 
+    request_timeout: int = 60
+
     results_wanted: int = 15
     hours_old: int | None = None
 
 
 class Scraper(ABC):
     def __init__(
-        self, site: Site, proxies: list[str] | None = None, ca_cert: str | None = None
+        self, site: Site, proxies: list[str] | None = None, ca_cert: str | None = None, user_agent: str | None = None
     ):
         self.site = site
         self.proxies = proxies
         self.ca_cert = ca_cert
+        self.user_agent = user_agent
 
     @abstractmethod
     def scrape(self, scraper_input: ScraperInput) -> JobResponse: ...
