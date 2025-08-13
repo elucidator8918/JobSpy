@@ -24,7 +24,7 @@ class UpworkScraper(Scraper):
     delay = 2
     band_delay = 3
 
-    def __init__(self, proxies: list[str] | str | None = None, ca_cert: str | None = None):
+    def __init__(self, proxies: list[str] | str | None = None, ca_cert: str | None = None, user_agent: str | None = None):
         super().__init__(Site.UPWORK, proxies=proxies, ca_cert=ca_cert)
         self.scraper_input = None
         self.country = "Hungary"

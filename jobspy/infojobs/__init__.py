@@ -27,7 +27,7 @@ class InfoJobsScraper(Scraper):
     band_delay = 3
     country = "Spain"
 
-    def __init__(self, proxies: list[str] | str | None = None, ca_cert: str | None = None):
+    def __init__(self, proxies: list[str] | str | None = None, ca_cert: str | None = None, user_agent: str | None = None):
         super().__init__(Site.INFOJOBS, proxies=proxies, ca_cert=ca_cert)
         self.scraper_input = None
 

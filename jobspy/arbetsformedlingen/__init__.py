@@ -26,7 +26,7 @@ class ArbetsformedlingenScraper(Scraper):
     band_delay = 3
     country = "Sweden" 
 
-    def __init__(self, proxies: list[str] | str | None = None, ca_cert: str | None = None):
+    def __init__(self, proxies: list[str] | str | None = None, ca_cert: str | None = None, user_agent: str | None = None):
         super().__init__(Site.ARBETSFORMEDLINGEN, proxies=proxies, ca_cert=ca_cert) # site needs to be provided
         self.scraper_input: Optional[ScraperInput] = None # Initialize as Optional
 
