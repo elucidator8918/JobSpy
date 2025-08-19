@@ -52,11 +52,11 @@ class UpworkScraper(Scraper):
             # 3. Convert to JobPost objects
             job_posts = await self._convert_to_job_posts(job_listings)
 
-            log.info(f"Successfully scraped {len(job_posts)} InfoJobs positions")
+            log.info(f"Successfully scraped {len(job_posts)} Upwork positions")
             return JobResponse(jobs=job_posts)
 
         except Exception as e:
-            log.error(f"Error scraping InfoJobs: {str(e)}")
+            log.error(f"Error scraping Upwork: {str(e)}")
             return JobResponse(jobs=[])
 
     async def _scrape_with_firecrawl(
