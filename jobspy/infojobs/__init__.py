@@ -115,14 +115,14 @@ class InfoJobsScraper(Scraper):
         For each job posting found, extract:
         - job_title: The title of the job posting
         - job_link: Complete job link URL (make sure it's a valid InfoJobs URL, if relative link found, prepend with https://www.infojobs.net)
-        - job_description: Brief description or summary of the job requirements and responsibilities
-        - job_company: Name of the company or client posting the job (if available)
+        - job_description: Summary of requirements/responsibilities
+        - job_company: Name of the company or client (if available)
         - job_location: Location requirements (remote, specific city/country, etc.)
-        - job_type: Type of employment (full-time, part-time, contract, freelance, etc.)
-        - job_interval: Payment interval (hourly, daily, weekly, monthly, yearly, fixed-price)
+        - job_type: Employment type (full-time, part-time, contract, freelance, etc.)
+        - job_interval: Payment interval (hourly, daily, weekly, monthly, yearly if mentioned, else null)
         - job_salary_min: Minimum salary or hourly rate (if mentioned, else null)
         - job_salary_max: Maximum salary or hourly rate (if mentioned, else null)
-        - job_salary_currency: Currency for the salary (default to USD if not specified)     
+        - job_salary_currency: Currency for the salary (default to USD if not specified)  
 
         Focus on all job postings found. If any field is not explicitly mentioned, set it to null.
 

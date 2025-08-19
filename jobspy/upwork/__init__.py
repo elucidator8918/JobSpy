@@ -13,10 +13,9 @@ from jobspy.model import (
     JobPost,
     JobResponse,
     Location,
-    Country,
     Compensation,
     CompensationInterval,
-    UpworkJobListing,
+    JobListing
 )
 from jobspy.util import create_logger
 
@@ -101,7 +100,7 @@ class UpworkScraper(Scraper):
 
     async def _process_with_gemini(
         self, markdown_content: str
-    ) -> List[UpworkJobListing]:
+    ) -> List[JobListing]:
         """Process markdown content with Gemini to extract structured job data"""
         client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
@@ -113,10 +112,9 @@ class UpworkScraper(Scraper):
         - job_link: Complete job link URL (prepend https://www.upwork.com if relative)
         - job_description: Summary of requirements/responsibilities
         - job_company: Name of the company or client (if available)
-        - job_city: City requirement (if any, else null)
-        - job_country: Country requirement (if any, else null)
+        - job_location: Location requirements (remote, specific city/country, etc.)
         - job_type: Employment type (full-time, part-time, contract, freelance, etc.)
-        - job_interval: Payment interval (hourly, daily, weekly, monthly, yearly, fixed-price)
+        - job_interval: Payment interval (hourly, daily, weekly, monthly, yearly if mentioned, else null)
         - job_salary_min: Minimum salary or hourly rate (if mentioned, else null)
         - job_salary_max: Maximum salary or hourly rate (if mentioned, else null)
         - job_salary_currency: Currency for the salary (default to USD if not specified)
@@ -134,28 +132,28 @@ class UpworkScraper(Scraper):
                 contents=prompt,
                 config={
                     "response_mime_type": "application/json",
-                    "response_schema": list[UpworkJobListing],
+                    "response_schema": list[JobListing],
                 },
             )
 
-            job_listings: list[UpworkJobListing] = response.parsed
+            job_listings: list[JobListing] = response.parsed
             return job_listings if job_listings else []
 
         except Exception as e:
             raise Exception(f"Gemini API error: {str(e)}")
 
     async def _convert_to_job_posts(
-        self, job_listings: List[UpworkJobListing]
+        self, job_listings: List[JobListing]
     ) -> List[JobPost]:
-        """Convert UpworkJobListing objects to JobPost objects"""
+        """Convert JobListing objects to JobPost objects"""
         job_posts = []
 
         for job in job_listings:
             try:
                 job_id = f"upwork-{abs(hash(job.job_link))}"
                 location_obj = Location(
-                    city=job.job_city,
-                    country=Country.from_string(job.job_country),
+                    city=job.job_location,
+                    country=None,
                 )
 
                 job_post = JobPost(
@@ -165,7 +163,7 @@ class UpworkScraper(Scraper):
                     location=location_obj,
                     job_url=job.job_link,
                     description=job.job_description,
-                    job_type=job.job_type,
+                    job_type=job.job_type.lower(),
                     compensation=Compensation(
                         interval=CompensationInterval.get_interval(job.job_interval),
                         min_amount=job.job_salary_min,
