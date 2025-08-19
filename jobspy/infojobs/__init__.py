@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import random
+import os
+import requests
 import asyncio
 from typing import List
-
-from playwright.async_api import async_playwright, Page
 from urllib.parse import urlencode
+from google import genai
 
 from jobspy.model import (
     Scraper,
@@ -15,6 +15,7 @@ from jobspy.model import (
     JobResponse,
     Location,
     Country,
+    JobListing,
 )
 from jobspy.util import create_logger
 
@@ -23,11 +24,14 @@ log = create_logger("InfoJobs")
 
 class InfoJobsScraper(Scraper):
     base_url = "https://www.infojobs.net"
-    delay = 2
-    band_delay = 3
     country = "Spain"
 
-    def __init__(self, proxies: list[str] | str | None = None, ca_cert: str | None = None, user_agent: str | None = None):
+    def __init__(
+        self,
+        proxies: list[str] | str | None = None,
+        ca_cert: str | None = None,
+        user_agent: str | None = None,
+    ):
         super().__init__(Site.INFOJOBS, proxies=proxies, ca_cert=ca_cert)
         self.scraper_input = None
 
@@ -36,89 +40,137 @@ class InfoJobsScraper(Scraper):
         return asyncio.run(self._async_scrape())
 
     async def _async_scrape(self) -> JobResponse:
-        job_list: list[JobPost] = []
-        results_wanted = self.scraper_input.results_wanted or 10
-
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context()
-            page = await context.new_page()
-
-            current_page_num = 1
-            while len(job_list) < results_wanted:
-                log.info(f"Fetching InfoJobs page {current_page_num}")
-                jobs = await self._fetch_jobs(page, self.scraper_input.search_term, current_page_num)
-                if not jobs:
-                    break
-
-                job_list.extend(jobs[: results_wanted - len(job_list)])
-                current_page_num += 1
-                await asyncio.sleep(random.uniform(self.delay, self.delay + self.band_delay))
-
-            await browser.close()
-
-        return JobResponse(jobs=job_list)
-
-    async def _fetch_jobs(self, page: Page, query: str, page_num: int) -> List[JobPost] | None:
         try:
-            query_params = {
-                "keyword": query,
-                "normalizedJobTitleIds": "",  # Can be added if you want to filter by title ID
-                "segmentId": "",
-                "page": page_num,
-                "sortBy": "RELEVANCE",
-                "onlyForeignCountry": "false",
-                "sinceDate": "ANY",
-            }
-
-            search_path = query.replace(" ", "-")
-            url = f"{self.base_url}/ofertas-trabajo/{search_path}/?{urlencode(query_params)}"
-
-            await page.goto(url, wait_until="domcontentloaded")
-            await page.wait_for_selector("article.js-job-card", timeout=30000)
-
-            job_cards = await page.query_selector_all("article.js-job-card")
-            if not job_cards:
-                log.debug(f"No job cards found on page {page_num}")
-                return None
-
-            job_posts = []
-            for card in job_cards:
-                try:
-                    job_post = await self._extract_job_info(card)
-                    if job_post:
-                        job_posts.append(job_post)
-                except Exception as e:
-                    log.error(f"Error extracting job info: {str(e)}")
-
-            return job_posts
-        except Exception as e:
-            log.error(f"Error fetching jobs: {str(e)}")
-            return None
-
-    async def _extract_job_info(self, card) -> JobPost | None:
-        try:
-            title_el = await card.query_selector("a.js-o-link")
-            title = await title_el.inner_text() if title_el else None
-            href = await title_el.get_attribute("href") if title_el else None
-            job_url = href if href and href.startswith("http") else f"{self.base_url}{href}"
-
-            company_el = await card.query_selector("span[data-test='company-name']")
-            company = await company_el.inner_text() if company_el else "Unknown"
-
-            location_el = await card.query_selector("span[data-test='location']")
-            location = await location_el.inner_text() if location_el else "Spain"
-
-            job_id = f"infojobs-{abs(hash(job_url))}"
-            location_obj = Location(city=location, country=Country.from_string(self.country))
-
-            return JobPost(
-                id=job_id,
-                title=title,
-                company_name=company,
-                location=location_obj,
-                job_url=job_url,
+            # 1. Scrape with Firecrawl
+            markdown_content = await self._scrape_with_firecrawl(
+                search_query=self.scraper_input.search_term
             )
+
+            # 2. Process with Gemini
+            job_listings = await self._process_with_gemini(markdown_content)
+
+            # 3. Convert to JobPost objects
+            job_posts = await self._convert_to_job_posts(job_listings)
+
+            log.info(f"Successfully scraped {len(job_posts)} InfoJobs positions")
+            return JobResponse(jobs=job_posts)
+
         except Exception as e:
-            log.error(f"Error extracting job details: {str(e)}")
-            return None
+            log.error(f"Error scraping InfoJobs: {str(e)}")
+            return JobResponse(jobs=[])
+
+    async def _scrape_with_firecrawl(self, search_query: str) -> str:
+        """Scrape InfoJobs using Firecrawl API"""
+        query_params = {
+            "keyword": search_query,
+            "page": 1,
+            "sortBy": "RELEVANCE",
+            "onlyForeignCountry": "false",
+        }
+
+        url = f"{self.base_url}/ofertas-trabajo/{search_query.replace(' ', '-')}/?{urlencode(query_params)}"
+
+        payload = {
+            "url": url,
+            "formats": ["markdown"],
+            "onlyMainContent": True,
+            "parsePDF": True,
+            "maxAge": 14400000,  # 4 hours cache
+            "proxy": "stealth",
+        }
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {os.getenv("FIRECRAWL_API_KEY")}",
+        }
+
+        try:
+            response = requests.post(
+                "https://api.firecrawl.dev/v1/scrape",
+                headers=headers,
+                json=payload,
+                timeout=60,
+            )
+            response.raise_for_status()
+
+            data = response.json()
+            if data.get("success") and "markdown" in data.get("data", {}):
+                return data["data"]["markdown"]
+            else:
+                raise Exception(
+                    f"Firecrawl API error: {data.get('error', 'Unknown error')}"
+                )
+
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Request failed: {str(e)}")
+
+    async def _process_with_gemini(self, markdown_content: str) -> List[JobListing]:
+        """Process markdown content with Gemini to extract structured job data"""
+        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+        prompt = f"""
+        Please analyze the following InfoJobs job listings markdown content and extract structured job information.
+        For each job posting found, extract:
+        - job_title: The title of the job posting
+        - job_link: Complete job link URL (make sure it's a valid InfoJobs URL, if relative link found, prepend with https://www.infojobs.net)
+        - job_description: Brief description or summary of the job requirements and responsibilities
+        - job_company: Name of the company or client posting the job (if available)
+        - job_location: Location requirements (remote, specific city/country, etc.)
+        - job_type: Type of employment (full-time, part-time, contract, freelance, etc.)
+        - job_interval: Payment interval (hourly, daily, weekly, monthly, fixed-price, etc.)
+        - job_salary: Salary information (hourly rate, budget, or salary range if mentioned)
+
+        Focus on all job postings found. If any field is not explicitly mentioned, set it to null.
+
+        Here's the markdown content:
+
+        {markdown_content}
+        """
+
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+                config={
+                    "response_mime_type": "application/json",
+                    "response_schema": list[JobListing],
+                },
+            )
+
+            job_listings: list[JobListing] = response.parsed
+            return job_listings if job_listings else []
+
+        except Exception as e:
+            raise Exception(f"Gemini API error: {str(e)}")
+
+    async def _convert_to_job_posts(
+        self, job_listings: List[JobListing]
+    ) -> List[JobPost]:
+        """Convert JobListing objects to JobPost objects"""
+        job_posts = []
+
+        for job in job_listings:
+            try:
+                job_id = f"infojobs-{abs(hash(job.job_link))}"
+                location_obj = Location(
+                    city=job.job_location or "Spain",
+                    country=Country.from_string(self.country),
+                )
+
+                job_post = JobPost(
+                    id=job_id,
+                    title=job.job_title,
+                    company_name=job.job_company or "Unknown",
+                    location=location_obj,
+                    job_url=job.job_link,
+                    description=job.job_description,
+                    job_type=job.job_type,
+                    compensation=job.job_salary,
+                )
+                job_posts.append(job_post)
+
+            except Exception as e:
+                log.error(f"Error converting job listing to JobPost: {str(e)}")
+                continue
+
+        return job_posts

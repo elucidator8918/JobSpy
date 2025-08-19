@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 from datetime import date
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class JobType(Enum):
@@ -283,6 +283,30 @@ class JobPost(BaseModel):
 class JobResponse(BaseModel):
     jobs: list[JobPost] = []
 
+
+class JobListing(BaseModel):
+    """Pydantic model for structured job data extraction"""
+    job_title: str = Field(description="The title of the job posting")
+    job_link: str = Field(description="Direct URL link to the job posting, should be complete URL")
+    job_description: Optional[str] = Field(description="Brief description or summary of the job requirements and responsibilities")
+    job_company: Optional[str] = Field(description="Name of the company offering the job")
+    job_location: Optional[str] = Field(description="Location of the job (city, state, country)")
+    job_type: Optional[str] = Field(description="Type of job (full-time, part-time, etc.)")
+    job_interval: Optional[str] = Field(description="Interval for the job (hourly, daily, weekly, etc.)")
+    job_salary: Optional[str] = Field(description="Salary information if available, including range, hourly rate, or budget")
+
+
+class UpworkJobListing(BaseModel):
+    """Pydantic model for structured job data extraction"""
+    job_title: str = Field(description="The title of the job posting")
+    job_link: str = Field(description="Direct URL link to the job posting, should be complete URL")
+    job_description: Optional[str] = Field(description="Brief description or summary of the job requirements and responsibilities")
+    job_company: Optional[str] = Field(description="Name of the company offering the job")
+    job_city: Optional[str] = Field(description="Location of the job (city)")
+    job_country: Optional[str] = Field(description="Location of the job (state, country)")
+    job_type: Optional[str] = Field(description="Type of job (full-time, part-time, etc.)")
+    job_interval: Optional[str] = Field(description="Interval for the job (hourly, daily, weekly, etc.)")
+    job_salary: Optional[str] = Field(description="Salary information if available, including range, hourly rate, or budget")
 
 
 class Site(Enum):

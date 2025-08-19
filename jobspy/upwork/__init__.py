@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-import random
+import os
+import requests
 import asyncio
-
-from playwright.async_api import async_playwright, Page
+from typing import List
+from google import genai
 
 from jobspy.model import (
     Scraper,
@@ -13,6 +14,7 @@ from jobspy.model import (
     JobResponse,
     Location,
     Country,
+    UpworkJobListing,
 )
 from jobspy.util import create_logger
 
@@ -21,91 +23,150 @@ log = create_logger("Upwork")
 
 class UpworkScraper(Scraper):
     base_url = "https://www.upwork.com"
-    delay = 2
-    band_delay = 3
 
-    def __init__(self, proxies: list[str] | str | None = None, ca_cert: str | None = None, user_agent: str | None = None):
+    def __init__(
+        self,
+        proxies: list[str] | str | None = None,
+        ca_cert: str | None = None,
+        user_agent: str | None = None,
+    ):
         super().__init__(Site.UPWORK, proxies=proxies, ca_cert=ca_cert)
         self.scraper_input = None
-        self.country = "Hungary"
 
     def scrape(self, scraper_input: ScraperInput) -> JobResponse:
         self.scraper_input = scraper_input
         return asyncio.run(self._async_scrape())
 
     async def _async_scrape(self) -> JobResponse:
-        job_list: list[JobPost] = []
-        results_wanted = self.scraper_input.results_wanted or 10
-
-        async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            context = await browser.new_context()
-            page = await context.new_page()
-
-            query = self.scraper_input.search_term.replace(" ", "%20")
-            search_url = f"{self.base_url}/search/jobs/?q={query}"
-            await page.goto(search_url, wait_until="domcontentloaded")
-
-            try:
-                await page.wait_for_selector("section.up-card-section", timeout=10000)
-            except Exception as e:
-                log.error(f"Upwork: Timeout waiting for job cards - {e}")
-                await browser.close()
-                return JobResponse(jobs=[])
-
-            previous_count = 0
-            scroll_attempts = 0
-            max_scroll_attempts = 10
-
-            while len(job_list) < results_wanted and scroll_attempts < max_scroll_attempts:
-                await page.evaluate("window.scrollBy(0, document.body.scrollHeight)")
-                await asyncio.sleep(random.uniform(self.delay, self.delay + self.band_delay))
-
-                job_cards = await page.query_selector_all("section.up-card-section")
-                new_count = len(job_cards)
-
-                if new_count == previous_count:
-                    scroll_attempts += 1
-                else:
-                    scroll_attempts = 0
-                    previous_count = new_count
-
-                for card in job_cards[len(job_list):]:  # Parse only new cards
-                    if len(job_list) >= results_wanted:
-                        break
-                    try:
-                        job_post = await self._extract_job_info(card)
-                        if job_post:
-                            job_list.append(job_post)
-                    except Exception as e:
-                        log.error(f"Upwork: Error extracting job info: {e}")
-
-            await browser.close()
-            return JobResponse(jobs=job_list[:results_wanted])
-
-    async def _extract_job_info(self, card) -> JobPost | None:
         try:
-            title_element = await card.query_selector("h4 a")
-            job_title = await title_element.inner_text() if title_element else None
-            job_url = await title_element.get_attribute("href") if title_element else None
-            if job_url and not job_url.startswith("http"):
-                job_url = f"{self.base_url}{job_url}"
-
-            company_element = await card.query_selector("span.up-line-clamp-v2")
-            company_name = await company_element.inner_text() if company_element else None
-
-            location = "Remote"  # Upwork jobs are typically remote
-
-            job_id = f"upwork-{abs(hash(job_url))}"
-            location_obj = Location(city=location, country=Country.from_string(self.country))
-
-            return JobPost(
-                id=job_id,
-                title=job_title,
-                company_name=company_name,
-                location=location_obj,
-                job_url=job_url,
+            # 1. Scrape with Firecrawl
+            markdown_content = await self._scrape_with_firecrawl(
+                search_query=self.scraper_input.search_term, per_page=50
             )
+
+            # 2. Process with Gemini
+            job_listings = await self._process_with_gemini(markdown_content)
+
+            # 3. Convert to JobPost objects
+            job_posts = await self._convert_to_job_posts(job_listings)
+
+            log.info(f"Successfully scraped {len(job_posts)} InfoJobs positions")
+            return JobResponse(jobs=job_posts)
+
         except Exception as e:
-            log.error(f"Upwork: Error extracting job details: {e}")
-            return None
+            log.error(f"Error scraping InfoJobs: {str(e)}")
+            return JobResponse(jobs=[])
+
+    async def _scrape_with_firecrawl(
+        self, search_query: str, per_page: int = 50
+    ) -> str:
+        """Scrape Upwork using Firecrawl API"""
+        url = f"{self.base_url}/nx/search/jobs/?q={search_query.replace(' ', '%20')}&per_page={per_page}"
+
+        payload = {
+            "url": url,
+            "formats": ["markdown"],
+            "onlyMainContent": True,
+            "proxy": "stealth",
+            "parsePDF": True,
+            "maxAge": 14400000,  # 4 hours cache
+        }
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {os.getenv("FIRECRAWL_API_KEY")}",
+        }
+
+        try:
+            response = requests.post(
+                "https://api.firecrawl.dev/v1/scrape",
+                headers=headers,
+                json=payload,
+                timeout=60,
+            )
+            response.raise_for_status()
+
+            data = response.json()
+            if data.get("success") and "markdown" in data.get("data", {}):
+                return data["data"]["markdown"]
+            else:
+                raise Exception(
+                    f"Firecrawl API error: {data.get('error', 'Unknown error')}"
+                )
+
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Request failed: {str(e)}")
+
+    async def _process_with_gemini(
+        self, markdown_content: str
+    ) -> List[UpworkJobListing]:
+        """Process markdown content with Gemini to extract structured job data"""
+        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
+        prompt = f"""
+        Please analyze the following Upwork job listings markdown content and extract structured job information.
+        For each job posting found, extract:
+        - job_title: The title of the job posting
+        - job_link: Complete job link URL (make sure it's a valid Upwork URL, if relative link found, prepend with https://www.upwork.com)
+        - job_description: Brief description or summary of the job requirements and responsibilities
+        - job_company: Name of the company or client posting the job (if available)
+        - job_city: City requirement (if any specific or remote)
+        - job_country: Country requirement (if any specific or remote)
+        - job_type: Type of employment (full-time, part-time, contract, freelance, etc.)
+        - job_interval: Payment interval (hourly, daily, weekly, monthly, fixed-price, etc.)
+        - job_salary: Salary information (hourly rate, budget, or salary range if mentioned)
+
+        Focus on all job postings found. If any field is not explicitly mentioned, set it to null.
+
+        Here's the markdown content:
+
+        {markdown_content}
+        """
+
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.5-flash",
+                contents=prompt,
+                config={
+                    "response_mime_type": "application/json",
+                    "response_schema": list[UpworkJobListing],
+                },
+            )
+
+            job_listings: list[UpworkJobListing] = response.parsed
+            return job_listings if job_listings else []
+
+        except Exception as e:
+            raise Exception(f"Gemini API error: {str(e)}")
+
+    async def _convert_to_job_posts(
+        self, job_listings: List[UpworkJobListing]
+    ) -> List[JobPost]:
+        """Convert UpworkJobListing objects to JobPost objects"""
+        job_posts = []
+
+        for job in job_listings:
+            try:
+                job_id = f"upwork-{abs(hash(job.job_link))}"
+                location_obj = Location(
+                    city=job.job_city or "remote",
+                    country=Country.from_string(job.job_country or "remote"),
+                )
+
+                job_post = JobPost(
+                    id=job_id,
+                    title=job.job_title,
+                    company_name=job.job_company or "Unknown Client",
+                    location=location_obj,
+                    job_url=job.job_link,
+                    description=job.job_description,
+                    job_type=job.job_type,
+                    compensation=job.job_salary,
+                )
+                job_posts.append(job_post)
+
+            except Exception as e:
+                log.error(f"Error converting job listing to JobPost: {str(e)}")
+                continue
+
+        return job_posts
