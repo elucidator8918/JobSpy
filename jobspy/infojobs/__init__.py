@@ -81,7 +81,7 @@ class InfoJobsScraper(Scraper):
 
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {os.getenv("FIRECRAWL_API_KEY")}",
+            "Authorization": f"Bearer {os.getenv('FIRECRAWL_API_KEY')}",
         }
 
         try:
