@@ -15,6 +15,8 @@ from jobspy.model import (
     JobResponse,
     Location,
     Country,
+    Compensation,
+    CompensationInterval,
     JobListing,
 )
 from jobspy.util import create_logger
@@ -117,8 +119,10 @@ class InfoJobsScraper(Scraper):
         - job_company: Name of the company or client posting the job (if available)
         - job_location: Location requirements (remote, specific city/country, etc.)
         - job_type: Type of employment (full-time, part-time, contract, freelance, etc.)
-        - job_interval: Payment interval (hourly, daily, weekly, monthly, fixed-price, etc.)
-        - job_salary: Salary information (hourly rate, budget, or salary range if mentioned)
+        - job_interval: Payment interval (hourly, daily, weekly, monthly, yearly, fixed-price)
+        - job_salary_min: Minimum salary or hourly rate (if mentioned, else null)
+        - job_salary_max: Maximum salary or hourly rate (if mentioned, else null)
+        - job_salary_currency: Currency for the salary (default to USD if not specified)     
 
         Focus on all job postings found. If any field is not explicitly mentioned, set it to null.
 
@@ -165,7 +169,12 @@ class InfoJobsScraper(Scraper):
                     job_url=job.job_link,
                     description=job.job_description,
                     job_type=job.job_type,
-                    compensation=job.job_salary,
+                    compensation=Compensation(
+                        interval=CompensationInterval.get_interval(job.job_interval),
+                        min_amount=job.job_salary_min,
+                        max_amount=job.job_salary_max,
+                        currency=job.job_salary_currency or "USD",
+                    ),
                 )
                 job_posts.append(job_post)
 

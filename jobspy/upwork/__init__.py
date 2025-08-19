@@ -14,6 +14,8 @@ from jobspy.model import (
     JobResponse,
     Location,
     Country,
+    Compensation,
+    CompensationInterval,
     UpworkJobListing,
 )
 from jobspy.util import create_logger
@@ -105,16 +107,19 @@ class UpworkScraper(Scraper):
 
         prompt = f"""
         Please analyze the following Upwork job listings markdown content and extract structured job information.
-        For each job posting found, extract:
-        - job_title: The title of the job posting
-        - job_link: Complete job link URL (make sure it's a valid Upwork URL, if relative link found, prepend with https://www.upwork.com)
-        - job_description: Brief description or summary of the job requirements and responsibilities
-        - job_company: Name of the company or client posting the job (if available)
-        - job_city: City requirement (if any specific or remote)
-        - job_country: Country requirement (if any specific or remote)
-        - job_type: Type of employment (full-time, part-time, contract, freelance, etc.)
-        - job_interval: Payment interval (hourly, daily, weekly, monthly, fixed-price, etc.)
-        - job_salary: Salary information (hourly rate, budget, or salary range if mentioned)
+
+        For each job posting, extract:
+        - job_title: The title of the job
+        - job_link: Complete job link URL (prepend https://www.upwork.com if relative)
+        - job_description: Summary of requirements/responsibilities
+        - job_company: Name of the company or client (if available)
+        - job_city: City requirement (if any, else null)
+        - job_country: Country requirement (if any, else null)
+        - job_type: Employment type (full-time, part-time, contract, freelance, etc.)
+        - job_interval: Payment interval (hourly, daily, weekly, monthly, yearly, fixed-price)
+        - job_salary_min: Minimum salary or hourly rate (if mentioned, else null)
+        - job_salary_max: Maximum salary or hourly rate (if mentioned, else null)
+        - job_salary_currency: Currency for the salary (default to USD if not specified)
 
         Focus on all job postings found. If any field is not explicitly mentioned, set it to null.
 
@@ -149,8 +154,8 @@ class UpworkScraper(Scraper):
             try:
                 job_id = f"upwork-{abs(hash(job.job_link))}"
                 location_obj = Location(
-                    city=job.job_city or "remote",
-                    country=Country.from_string(job.job_country or "remote"),
+                    city=job.job_city,
+                    country=Country.from_string(job.job_country),
                 )
 
                 job_post = JobPost(
@@ -161,7 +166,12 @@ class UpworkScraper(Scraper):
                     job_url=job.job_link,
                     description=job.job_description,
                     job_type=job.job_type,
-                    compensation=job.job_salary,
+                    compensation=Compensation(
+                        interval=CompensationInterval.get_interval(job.job_interval),
+                        min_amount=job.job_salary_min,
+                        max_amount=job.job_salary_max,
+                        currency=job.job_salary_currency or "USD",
+                    ),
                 )
                 job_posts.append(job_post)
 

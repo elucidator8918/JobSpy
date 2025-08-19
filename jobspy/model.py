@@ -292,9 +292,10 @@ class JobListing(BaseModel):
     job_company: Optional[str] = Field(description="Name of the company offering the job")
     job_location: Optional[str] = Field(description="Location of the job (city, state, country)")
     job_type: Optional[str] = Field(description="Type of job (full-time, part-time, etc.)")
-    job_interval: Optional[str] = Field(description="Interval for the job (hourly, daily, weekly, etc.)")
-    job_salary: Optional[str] = Field(description="Salary information if available, including range, hourly rate, or budget")
-
+    job_interval: Optional[str] = Field(description="Interval for the job (hourly, daily, weekly, monthly, yearly.)")
+    job_salary_min: Optional[str] = Field(description="Minimum Salary information if available, including range, hourly rate, or budget")
+    job_salary_max: Optional[str] = Field(description="Maximum Salary information if available, including range, hourly rate, or budget")
+    job_salary_currency: Optional[str] = Field(description="Currency information if available")
 
 class UpworkJobListing(BaseModel):
     """Pydantic model for structured job data extraction"""
@@ -305,8 +306,10 @@ class UpworkJobListing(BaseModel):
     job_city: Optional[str] = Field(description="Location of the job (city)")
     job_country: Optional[str] = Field(description="Location of the job (state, country)")
     job_type: Optional[str] = Field(description="Type of job (full-time, part-time, etc.)")
-    job_interval: Optional[str] = Field(description="Interval for the job (hourly, daily, weekly, etc.)")
-    job_salary: Optional[str] = Field(description="Salary information if available, including range, hourly rate, or budget")
+    job_interval: Optional[str] = Field(description="Interval for the job (hourly, daily, weekly, monthly, yearly.)")
+    job_salary_min: Optional[str] = Field(description="Minimum Salary information if available, including range, hourly rate, or budget")
+    job_salary_max: Optional[str] = Field(description="Maximum Salary information if available, including range, hourly rate, or budget")
+    job_salary_currency: Optional[str] = Field(description="Currency information if available")
 
 
 class Site(Enum):
