@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 class JobType(Enum):
     FULL_TIME = (
         "fulltime",
+        "full-time",
         "períodointegral",
         "estágio/trainee",
         "cunormăîntreagă",
@@ -40,7 +41,7 @@ class JobType(Enum):
         "toànthờigian",
     )
     PART_TIME = ("parttime", "teilzeit", "částečnýúvazek", "deltid")
-    CONTRACT = ("contract", "contractor")
+    CONTRACT = ("contract", "contractor", "freelance")
     TEMPORARY = ("temporary",)
     INTERNSHIP = (
         "internship",
@@ -291,7 +292,7 @@ class JobListing(BaseModel):
     job_description: Optional[str] = Field(description="Brief description or summary of the job requirements and responsibilities")
     job_company: Optional[str] = Field(description="Name of the company offering the job")
     job_location: Optional[str] = Field(description="Location of the job (city, state, country)")
-    job_type: Optional[list[JobType]] = Field(description="Type of job (full-time, part-time, etc.)")
+    job_type: Optional[list[str]] = Field(description="Type of job (full-time, part-time, etc.)")
     job_interval: Optional[str] = Field(description="Interval for the job (hourly, daily, weekly, monthly, yearly.)")
     job_salary_min: Optional[float] = Field(description="Minimum Salary information if available, including range, hourly rate, or budget")
     job_salary_max: Optional[float] = Field(description="Maximum Salary information if available, including range, hourly rate, or budget")

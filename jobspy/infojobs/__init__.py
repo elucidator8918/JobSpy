@@ -14,7 +14,7 @@ from jobspy.model import (
     JobPost,
     JobResponse,
     Location,
-    Country,
+    JobType,
     Compensation,
     CompensationInterval,
     JobListing,
@@ -155,20 +155,29 @@ class InfoJobsScraper(Scraper):
 
         for job in job_listings:
             try:
-                job_id = f"infojobs-{abs(hash(job.job_link))}"
+                job_id = f"upwork-{abs(hash(job.job_link))}"
                 location_obj = Location(
-                    city=job.job_location or "Spain",
-                    country=Country.from_string(self.country),
+                    city=job.job_location,
+                    country=None,
                 )
+
+                job_type_enums: list[JobType] = []
+                if job.job_type:
+                    for jt_string in job.job_type:
+                        normalized_jt = jt_string.lower().strip()
+                        for member in JobType:
+                            if normalized_jt in member.value:
+                                job_type_enums.append(member)
+                                break
 
                 job_post = JobPost(
                     id=job_id,
                     title=job.job_title,
-                    company_name=job.job_company or "Unknown",
+                    company_name=job.job_company or "Unknown Client",
                     location=location_obj,
                     job_url=job.job_link,
                     description=job.job_description,
-                    job_type=job.job_type,
+                    job_type=job_type_enums if job_type_enums else None,
                     compensation=Compensation(
                         interval=CompensationInterval.get_interval(job.job_interval),
                         min_amount=job.job_salary_min,

@@ -10,6 +10,7 @@ from jobspy.model import (
     Scraper,
     ScraperInput,
     Site,
+    JobType,
     JobPost,
     JobResponse,
     Location,
@@ -156,6 +157,15 @@ class UpworkScraper(Scraper):
                     country=None,
                 )
 
+                job_type_enums: list[JobType] = []
+                if job.job_type:
+                    for jt_string in job.job_type:
+                        normalized_jt = jt_string.lower().strip()
+                        for member in JobType:
+                            if normalized_jt in member.value:
+                                job_type_enums.append(member)
+                                break
+
                 job_post = JobPost(
                     id=job_id,
                     title=job.job_title,
@@ -163,7 +173,7 @@ class UpworkScraper(Scraper):
                     location=location_obj,
                     job_url=job.job_link,
                     description=job.job_description,
-                    job_type=job.job_type.lower(),
+                    job_type=job_type_enums if job_type_enums else None,
                     compensation=Compensation(
                         interval=CompensationInterval.get_interval(job.job_interval),
                         min_amount=job.job_salary_min,
